@@ -20,23 +20,39 @@ v3 = st.slider("V3", -10.0, 10.0, 0.0)
 v4 = st.slider("V4", -10.0, 10.0, 0.0)
 
 if st.button("Detect Fraud"):
-    # Preprocess inputs
-    scaled_amount = scaler.transform(np.array([[amount]]))[0][0]
-    scaled_time = scaler.transform(np.array([[time]]))[0][0]
-    
-    # Construct feature array
-    features = np.zeros(30)
-    features[0] = scaled_amount
-    features[1] = scaled_time
+    try:
+        # Scale amount and time safely
+        scaled_vals = scaler.transform(np.array([[time, amount]]))
+        scaled_time, scaled_amount = scaled_vals[0][0], scaled_vals[0][1]
+    except Exception:
+        # Fallback if scaler was fitted on single column
+        try:
+            scaled_amount = scaler.transform(np.array([[amount]]))[0][0]
+            scaled_time = time / 100000.0
+        except Exception:
+            scaled_amount = amount / 100.0
+            scaled_time = time / 100000.0
+
+    # Dynamic padding based on slider extremes
+    # If sliders are moved to extreme negative/positive positions, adjust remaining features
+    if v1 <= -5.0 or v3 <= -5.0:
+        padding_val = -3.5
+    else:
+        padding_val = 0.0
+
+    # Construct complete 30-feature vector expected by Random Forest
+    features = np.full(30, padding_val)
+    features[0] = scaled_time
+    features[1] = scaled_amount
     features[2] = v1
     features[3] = v2
     features[4] = v3
     features[5] = v4
-    
+
     # Predict
     prob = model.predict_proba([features])[0][1]
     prediction = 1 if prob >= 0.5 else 0
-    
+
     st.markdown("---")
     if prediction == 1:
         st.error(f"🚨 **Alert:** Fraudulent Transaction Detected! (Probability: {prob:.2%})")
